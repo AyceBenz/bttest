@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bluetooth Audio Transmitter</title>
+</head>
+<body>
+    <h1>Bluetooth Audio Transmitter</h1>
+    <input type="file" id="fileInput" accept=".h" />
+    <button id="connectBtn">Connect and Transmit</button>
+    <script>
+        let bluetoothDevice;
+        let characteristic;
+
+        async function connectToBluetooth() {
+            try {
+                bluetoothDevice = await navigator.bluetooth.requestDevice({
+                    filters: [{ services: ['00001101-0000-1000-8000-00805f9b34fb'] }] // Standard Serial Port Profile
+                });
+
+                const server = await bluetoothDevice.gatt.connect();
+                const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb'); // Standard Serial Port Profile
+                characteristic = await service.getCharacteristic('your_characteristic_uuid'); // Replace with your characteristic UUID
+                console.log('Connected to Bluetooth device:', bluetoothDevice.name);
+            } catch (error) {
+                console.error('Error connecting to Bluetooth device:', error);
+            }
+        }
+
+        function readAndTransmitFile() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a file.');
+                return;
+            }
+
+            const reader = new FileReader();
+
+            reader.onload = async function(event) {
+                const hexString = event.target.result
+                    .replace(/0x/g, '')  // Remove "0x"
+                    .replace(/ /g, '')   // Remove spaces
+                    .replace(/,/g, '');   // Remove commas
+
+                for (let i = 0; i < hexString.length; i += 20) {  // 20 chars = 10 bytes
+                    const chunk = hexString.slice(i, i + 20);
+                    await transmitData(chunk);
+                }
+            };
+
+            reader.readAsText(file);
+        }
+
+        async function transmitData(data) {
+            if (characteristic) {
+                const byteArray = new Uint8Array(data.match(/.{1,2}/g).map(byte => parseInt(byte, 16))); // Convert hex to byte array
+                await characteristic.writeValue(byteArray);
+                console.log('Sent:', data);
+            } else {
+                console.error('Characteristic not available.');
+            }
+        }
+
+        document.getElementById('connectBtn').addEventListener('click', async () => {
+            await connectToBluetooth();
+            readAndTransmitFile();
+        });
+    </script>
+</body>
+</html>
