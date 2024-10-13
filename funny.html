@@ -1,92 +1,33 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Serial Port File Transmission</title>
+    <title>Bluetooth Audio Streamer</title>
 </head>
 <body>
-    <h1>Serial Port Communication with File Processing</h1>
-
-    <button id="connectBtn">Connect to Serial Port</button>
-    <button id="transmitBtn" disabled>Transmit Data</button>
-    <input type="file" id="fileInput">
-    <textarea id="dataOutput" placeholder="Processed data..." rows="4" cols="50" readonly></textarea>
-
+    <h2>Bluetooth Audio Streamer</h2>
+    <input type="file" id="fileInput" />
+    <button id="connectBtn">Connect to Serial</button>
+    <p id="status"></p>
     <script>
-        let port;
         let writer;
+        let fileReader;
+        let chunkSize = 40;  // Send 20 bytes as hex (40 hex characters)
+        let serialPort;
 
-        // Function to connect to a serial port
-        async function connectToSerial() {
-            try {
-                // Request user to select any available serial port
-                port = await navigator.serial.requestPort();
-
-                // Open the selected serial port with the specified baud rate
-                await port.open({ baudRate: 9600 });
-
-                // Enable the transmit button once connected
-                document.getElementById('transmitBtn').disabled = false;
-                console.log('Serial port connected.');
-
-                // Set up a writer stream to transmit data
-                const textEncoder = new TextEncoderStream();
-                writer = textEncoder.writable.getWriter();
-                const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
-
-                document.getElementById('transmitBtn').addEventListener('click', transmitData);
-
-            } catch (error) {
-                console.error("Error connecting to serial port: ", error);
-            }
-        }
-
-        // Function to process the file input and convert the content
         document.getElementById('fileInput').addEventListener('change', function(event) {
             const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                let fileContent = e.target.result;
-
-                // Remove unwanted characters (commas, 0x, spaces, and line breaks)
-                let processedContent = fileContent
-                    .replace(/0x/g, '')  // Remove "0x"
-                    .replace(/,/g, '')   // Remove commas
-                    .replace(/\s+/g, '') // Remove spaces and line breaks
-
-                // Display the processed content
-                document.getElementById('dataOutput').value = processedContent;
-            };
-
-            reader.readAsText(file);
+            if (file) {
+                fileReader = new FileReader();
+                fileReader.onload = (e) => processFile(e.target.result);
+                fileReader.readAsText(file);
+            }
         });
 
-        // Function to transmit data over the connected serial port
-        async function transmitData() {
+        async function connectToSerial() {
             try {
-                const data = document.getElementById('dataOutput').value;
-
-                if (writer && data) {
-                    // Transmit data in chunks of 10 bytes
-                    for (let i = 0; i < data.length; i += 20) {
-                        const chunk = data.slice(i, i + 20);  // Adjust chunk size (20 characters = 10 bytes)
-                        await writer.write(chunk);  // Send the chunk
-                        console.log('Transmitting chunk:', chunk);
-                    }
-
-                    console.log('Data transmission complete.');
-                }
-            } catch (error) {
-                console.error("Error transmitting data: ", error);
-            }
-        }
-
-        // Add event listener to connect button
-        document.getElementById('connectBtn').addEventListener('click', connectToSerial);
-
-    </script>
-</body>
-</html>
+                document.getElementById('status').textContent = 'Requesting Bluetooth Device...';
+                serialPort = await navigator.serial.requestPort();
+                document.getElementById('status').textContent = 'Opening Serial Port...';
+                await serialPort.open({ baudRate: 115200 });
+                writer = serialPort.writable.getWriter();
+                document.getElementById('status').textContent = 'Connected to Serial 
