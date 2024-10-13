@@ -3,22 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Serial File Transmission</title>
+    <title>Serial Port File Transmission</title>
 </head>
 <body>
-    <h1>Serial File Transmission</h1>
+    <h1>Serial Port Communication with File Processing</h1>
 
-    <!-- Button to connect to serial port -->
     <button id="connectBtn">Connect to Serial Port</button>
-
-    <!-- File input to upload hex file -->
-    <input type="file" id="fileInput" accept=".h,.txt">
-    
-    <!-- Button to transmit data (disabled initially) -->
     <button id="transmitBtn" disabled>Transmit Data</button>
-
-    <!-- Displaying status messages -->
-    <p id="statusMessage"></p>
+    <input type="file" id="fileInput">
+    <textarea id="dataOutput" placeholder="Processed data..." rows="4" cols="50" readonly></textarea>
 
     <script>
         let port;
@@ -29,11 +22,15 @@
             try {
                 // Request user to select any available serial port
                 port = await navigator.serial.requestPort();
+
+                // Open the selected serial port with the specified baud rate
                 await port.open({ baudRate: 9600 });
 
+                // Enable the transmit button once connected
                 document.getElementById('transmitBtn').disabled = false;
-                document.getElementById('statusMessage').innerText = 'Serial port connected.';
-                
+                console.log('Serial port connected.');
+
+                // Set up a writer stream to transmit data
                 const textEncoder = new TextEncoderStream();
                 writer = textEncoder.writable.getWriter();
                 const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
@@ -45,63 +42,50 @@
             }
         }
 
-        // Function to handle file reading, converting, and real-time transmission
-        function processFile(file) {
-            const reader = new FileReader();
+        // Function to process the file input and convert the content
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
 
-            reader.onload = function(event) {
-                let content = event.target.result;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                let fileContent = e.target.result;
 
                 // Remove unwanted characters (commas, 0x, spaces, and line breaks)
-                content = content.replace(/0x/g, '')        // Remove '0x'
-                                 .replace(/,/g, '')        // Remove commas
-                                 .replace(/\s+/g, '');     // Remove spaces and newlines
-                
-                // Split the content into chunks of 10 bytes (20 hex characters)
-                let chunks = content.match(/.{1,20}/g);
+                let processedContent = fileContent
+                    .replace(/0x/g, '')  // Remove "0x"
+                    .replace(/,/g, '')   // Remove commas
+                    .replace(/\s+/g, '') // Remove spaces and line breaks
 
-                // Send each chunk in real-time (asynchronously)
-                transmitChunks(chunks);
+                // Display the processed content
+                document.getElementById('dataOutput').value = processedContent;
             };
 
             reader.readAsText(file);
-        }
-
-        // Function to transmit data chunks over serial in real-time
-        async function transmitChunks(chunks) {
-            for (const chunk of chunks) {
-                if (writer) {
-                    await writer.write(chunk);  // Transmit each chunk
-                    console.log('Data transmitted:', chunk);
-
-                    // Add a small delay between chunks to simulate real-time transmission
-                    await new Promise(resolve => setTimeout(resolve, 100));  // 100ms delay
-                }
-            }
-
-            console.log('Finished transmitting file.');
-        }
-
-        // Trigger file selection and process the file
-        document.getElementById('fileInput').addEventListener('change', function(event) {
-            const file = event.target.files[0];
-            if (file) {
-                processFile(file);
-            }
         });
+
+        // Function to transmit data over the connected serial port
+        async function transmitData() {
+            try {
+                const data = document.getElementById('dataOutput').value;
+
+                if (writer && data) {
+                    // Transmit data in chunks of 10 bytes
+                    for (let i = 0; i < data.length; i += 20) {
+                        const chunk = data.slice(i, i + 20);  // Adjust chunk size (20 characters = 10 bytes)
+                        await writer.write(chunk);  // Send the chunk
+                        console.log('Transmitting chunk:', chunk);
+                    }
+
+                    console.log('Data transmission complete.');
+                }
+            } catch (error) {
+                console.error("Error transmitting data: ", error);
+            }
+        }
 
         // Add event listener to connect button
         document.getElementById('connectBtn').addEventListener('click', connectToSerial);
-
-        // Add event listener to transmit button
-        function transmitData() {
-            const fileInput = document.getElementById('fileInput');
-            if (fileInput.files.length > 0) {
-                processFile(fileInput.files[0]);
-            } else {
-                alert('Please select a file first.');
-            }
-        }
 
     </script>
 </body>
