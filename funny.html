@@ -3,71 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bluetooth Audio Transmitter</title>
+    <title>Serial Port Communication</title>
 </head>
 <body>
-    <h1>Bluetooth Audio Transmitter</h1>
-    <input type="file" id="fileInput" accept=".h" />
-    <button id="connectBtn">Connect and Transmit</button>
+    <h1>Serial Port Communication</h1>
+
+    <button id="connectBtn">Connect to Serial Port</button>
+    <button id="transmitBtn" disabled>Transmit Data</button>
+    <textarea id="dataInput" placeholder="Enter data to transmit..." rows="4" cols="50"></textarea>
+
     <script>
-        let bluetoothDevice;
-        let characteristic;
+        let port;
+        let writer;
 
-        async function connectToBluetooth() {
+        // Function to connect to a serial port
+        async function connectToSerial() {
             try {
-                bluetoothDevice = await navigator.bluetooth.requestDevice({
-                    filters: [{ services: ['00001101-0000-1000-8000-00805f9b34fb'] }] // Standard Serial Port Profile
-                });
+                // Request user to select any available serial port
+                port = await navigator.serial.requestPort();
 
-                const server = await bluetoothDevice.gatt.connect();
-                const service = await server.getPrimaryService('00001101-0000-1000-8000-00805f9b34fb'); // Standard Serial Port Profile
-                characteristic = await service.getCharacteristic('your_characteristic_uuid'); // Replace with your characteristic UUID
-                console.log('Connected to Bluetooth device:', bluetoothDevice.name);
+                // Open the selected serial port with the specified baud rate
+                await port.open({ baudRate: 9600 });
+
+                // Enable the transmit button once connected
+                document.getElementById('transmitBtn').disabled = false;
+                console.log('Serial port connected.');
+
+                // Set up a writer stream to transmit data
+                const textEncoder = new TextEncoderStream();
+                writer = textEncoder.writable.getWriter();
+                const writableStreamClosed = textEncoder.readable.pipeTo(port.writable);
+
+                document.getElementById('transmitBtn').addEventListener('click', transmitData);
+
             } catch (error) {
-                console.error('Error connecting to Bluetooth device:', error);
+                console.error("Error connecting to serial port: ", error);
             }
         }
 
-        function readAndTransmitFile() {
-            const fileInput = document.getElementById('fileInput');
-            const file = fileInput.files[0];
-
-            if (!file) {
-                alert('Please select a file.');
-                return;
-            }
-
-            const reader = new FileReader();
-
-            reader.onload = async function(event) {
-                const hexString = event.target.result
-                    .replace(/0x/g, '')  // Remove "0x"
-                    .replace(/ /g, '')   // Remove spaces
-                    .replace(/,/g, '');   // Remove commas
-
-                for (let i = 0; i < hexString.length; i += 20) {  // 20 chars = 10 bytes
-                    const chunk = hexString.slice(i, i + 20);
-                    await transmitData(chunk);
+        // Function to transmit data over the connected serial port
+        async function transmitData() {
+            try {
+                const data = document.getElementById('dataInput').value;
+                if (writer) {
+                    await writer.write(data);  // Send the data entered in the text area
+                    console.log('Data transmitted:', data);
                 }
-            };
-
-            reader.readAsText(file);
-        }
-
-        async function transmitData(data) {
-            if (characteristic) {
-                const byteArray = new Uint8Array(data.match(/.{1,2}/g).map(byte => parseInt(byte, 16))); // Convert hex to byte array
-                await characteristic.writeValue(byteArray);
-                console.log('Sent:', data);
-            } else {
-                console.error('Characteristic not available.');
+            } catch (error) {
+                console.error("Error transmitting data: ", error);
             }
         }
 
-        document.getElementById('connectBtn').addEventListener('click', async () => {
-            await connectToBluetooth();
-            readAndTransmitFile();
-        });
+        // Add event listener to connect button
+        document.getElementById('connectBtn').addEventListener('click', connectToSerial);
+
     </script>
 </body>
 </html>
